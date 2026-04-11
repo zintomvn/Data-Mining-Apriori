@@ -1,0 +1,11 @@
+name = "DataMiningApriori"
+uuid = "12345678-1234-1234-1234-123456789abc"
+authors = ["Group"]
+version = "1.0.0"
+
+[deps]
+Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+
+[compat]
+julia = "1.9"
+Plots = "1"
