@@ -1,0 +1,101 @@
+# Kế hoạch cài đặt: Chương 3, 4, 5 – Apriori FIM (Julia)
+
+## Mô tả
+
+Dựa trên code Apriori đã có tại `src/algorithm/`, viết thêm:
+- **Chương 3**: Các file cấu trúc (`structures.jl`, `utils.jl`) + Level 3/4 hoàn chỉnh + unit tests
+- **Chương 4**: 6 thực nghiệm trên 5 benchmark datasets, tự động lưu biểu đồ `.png`
+- **Chương 5**: Market Basket Analysis trên Retail dataset
+
+---
+
+## Cấu trúc file sẽ tạo/chỉnh sửa
+
+### src/algorithm/
+#### [MODIFY] [apriori.jl](file:///d:/University/Semester%208/Class%20-%20Data%20mining/Lab/Lab%202/Data-Mining-Apriori/src/algorithm/apriori.jl)
+Sẽ được refactor lại thành module sạch, không có code chạy trực tiếp ở top-level.
+
+#### [NEW] structures.jl
+```
+src/structures.jl
+```
+Định nghĩa `Itemset` struct với docstring đầy đủ. Tách khỏi `apriori.jl`.
+
+#### [NEW] utils.jl
+```
+src/utils.jl
+```
+- `load_database(filepath)` - đọc file SPMF format
+- `save_results(...)` - xuất kết quả dạng SPMF
+- `count_peak_memory(f, args...)` - đo RAM peak
+- `relative_support(count, db_size)` - tính support tương đối
+
+---
+
+### tests/
+#### [NEW] test_correctness.jl
+Unit test trên ≥5 CSDL toy, so sánh với kết quả tham chiếu cứng.
+
+#### [NEW] test_benchmark.jl
+Script đo hiệu năng chạy Apriori trên benchmark datasets.
+
+---
+
+### src/ (experiments)
+#### [NEW] experiments.jl
+Script thực nghiệm Chương 4, 6 thực nghiệm đầy đủ, tự lưu PNG:
+- **Exp A**: Correctness check (số itemset khớp với SPMF)
+- **Exp B**: Thời gian chạy theo minsup (line chart)
+- **Exp C**: Số lượng itemset theo minsup (line chart)
+- **Exp D**: Bộ nhớ tại minsup trung bình (bar chart)
+- **Exp E**: Scalability theo % database size (line chart)
+- **Exp F**: Ảnh hưởng độ dài transaction (line chart)
+
+#### [NEW] chapter5_market_basket.jl
+Chương 5 - Market Basket Analysis:
+- Load retail.txt
+- Chạy Apriori
+- Sinh association rules với minconf
+- In top-10 rules theo lift
+
+---
+
+## Các phụ thuộc Julia cần thiết
+
+```toml
+[deps]
+Plots = "..."         # vẽ biểu đồ
+Printf = "..."        # format output (stdlib)
+Statistics = "..."    # mean, std (stdlib)
+```
+
+> [!IMPORTANT]
+> Cần thêm package `Plots` vào `Project.toml`. Hiện tại chưa có `Project.toml`.
+
+---
+
+## Câu hỏi mở
+
+> [!WARNING]
+> **Kết quả SPMF tham chiếu**: Thực nghiệm Exp A yêu cầu so sánh với SPMF. Tuy nhiên SPMF là tool Java riêng biệt. Tôi sẽ xử lý bằng cách:
+> - Với các CSDL toy: hardcode kết quả đúng đã tính tay vào unit test
+> - Với benchmark: chạy và báo cáo số lượng itemsets tìm được, note rằng kết quả cần cross-check thủ công với SPMF
+
+> [!NOTE]
+> **Plots backend**: Sẽ dùng `GR` backend (mặc định) hoặc `PGFPlotsX`. Cần Julia có package `Plots` đã cài.
+
+---
+
+## Verification Plan
+
+### Automated
+```bash
+julia --project tests/test_correctness.jl
+julia --project tests/test_benchmark.jl
+julia --project src/experiments.jl
+julia --project src/chapter5_market_basket.jl
+```
+
+### Manual
+- Kiểm tra folder `docs/` có 6 file PNG biểu đồ
+- Kiểm tra console output in tiến trình rõ ràng

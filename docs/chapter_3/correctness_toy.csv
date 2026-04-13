@@ -1,0 +1,6 @@
+dataset,minsup_pct,db_size,n_fi_basic,time_basic_ms,n_fi_opt,time_opt_ms,n_fi_spmf,time_spmf_ms,n_match_spmf,match_pct_spmf,basic_opt_consistent
+db1,50.0,7,4,0.08,4,0.04,4,411.33,4,100.0,Yes
+db2,40.0,5,7,0.01,7,0.01,7,411.18,7,100.0,Yes
+db3,50.0,3,31,0.03,31,0.03,31,400.42,31,100.0,Yes
+db4,40.0,5,4,0.01,4,0.02,4,407.97,4,100.0,Yes
+db5,50.0,6,25,0.05,25,0.07,25,406.71,25,100.0,Yes
