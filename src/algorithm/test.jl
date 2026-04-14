@@ -109,7 +109,6 @@ end
 
 # ============================================================
 #  apriori(D, minsup) → L
-#  Chính xác theo pseudocode trong paper
 # ============================================================
 function apriori(D::Vector{Vector{Int}}, minsup::Float64)
     db_size      = length(D)

@@ -1,7 +1,7 @@
 # src/algorithm/structures.jl
 # Cấu trúc dữ liệu cho Apriori FIM:
-#   - Itemset, AssociationRule (cơ bản)
-#   - HashTreeNode, HashTree   (tối ưu theo paper gốc Agrawal & Srikant 1994)
+#   - Itemset, AssociationRule
+#   - HashTreeNode, HashTree   
 # File này phải được include đầu tiên.
 
 using Printf
@@ -258,7 +258,7 @@ end
 Tìm tất cả candidates trong Ck (lưu trong hash tree) là subset của `transaction`.
 Trả về danh sách chỉ số ci.
 
-# Thuật toán (paper gốc)
+# Thuật toán 
 Bắt đầu từ root. Tại mỗi internal node ở depth d:
 - Với mỗi item t[i] trong transaction (i ≥ vị trí bắt đầu):
   + Hash t[i] → tìm child → đệ quy với depth+1, start=i+1
