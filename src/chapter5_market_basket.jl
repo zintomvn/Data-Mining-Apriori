@@ -15,7 +15,7 @@ gr()
 
 # ─── CONFIG ───────────────────────────────────────────────────────────────────
 const ROOT        = joinpath(@__DIR__, "..")
-const RETAIL_PATH = joinpath(ROOT, "data", "benchmark", "retail.txt")
+const GROCERIES_PATH = joinpath(ROOT, "data", "market", "groceries.csv")
 const CSV_DIR     = joinpath(ROOT, "docs", "chapter_5")
 mkpath(CSV_DIR)
 
@@ -26,17 +26,51 @@ const TOP_N   = 10
 # ═══════════════════════════════════════════════════════════════════════════════
 # MAIN
 # ═══════════════════════════════════════════════════════════════════════════════
+function load_groceries_csv(filepath::String)
+    db = Vector{Vector{Int}}()
+    item_to_id = Dict{String, Int}()
+    id_to_item = Dict{Int, String}()
+    current_id = 1
+    
+    open(filepath, "r") do f
+        first_line = true
+        for line in eachline(f)
+            if first_line
+                first_line = false
+                continue
+            end
+            parts = split(strip(line), ",")
+            t = Int[]
+            for i in 2:length(parts)
+                item = strip(parts[i])
+                if !isempty(item)
+                    if !haskey(item_to_id, item)
+                        item_to_id[item] = current_id
+                        id_to_item[current_id] = item
+                        current_id += 1
+                    end
+                    push!(t, item_to_id[item])
+                end
+            end
+            if !isempty(t)
+                push!(db, sort!(t))
+            end
+        end
+    end
+    return db, id_to_item
+end
+
 function main()
     println("=" ^ 60)
     println("  CHƯƠNG 5 – MARKET BASKET ANALYSIS")
-    println("  Dataset: Retail | Minsup=$(MINSUP*100)% | Minconf=$(MINCONF*100)%")
+    println("  Dataset: Groceries | Minsup=$(MINSUP*100)% | Minconf=$(MINCONF*100)%")
     println("=" ^ 60)
 
-    isfile(RETAIL_PATH) || error("File not found: $RETAIL_PATH")
+    isfile(GROCERIES_PATH) || error("File not found: $GROCERIES_PATH")
 
     # ─── 1. Load data ─────────────────────────────────────────────────────────
     println("\n  Loading data...")
-    D = load_database(RETAIL_PATH)
+    D, id_to_item = load_groceries_csv(GROCERIES_PATH)
     db_size = length(D)
     n_items = length(unique(vcat(D...)))
     avg_len = mean(length.(D))
@@ -59,7 +93,8 @@ function main()
     fi_rows = []
     for k in sort(collect(keys(frequent)))
         for is in sort(frequent[k])
-            push!(fi_rows, [join(is.itemset, " "), is.count,
+            itemset_names = join([id_to_item[idx] for idx in is.itemset], ", ")
+            push!(fi_rows, ["\"$itemset_names\"", is.count,
                             round(relative_support(is.count, db_size)*100, digits=4)])
         end
     end
@@ -80,7 +115,9 @@ function main()
                     "confidence_pct", "lift"]
     rule_rows = []
     for (i, r) in enumerate(rules)
-        push!(rule_rows, [i, join(r.antecedent, " "), join(r.consequent, " "),
+        ant_names = join([id_to_item[idx] for idx in r.antecedent], ", ")
+        con_names = join([id_to_item[idx] for idx in r.consequent], ", ")
+        push!(rule_rows, [i, "\"$ant_names\"", "\"$con_names\"",
                           round(r.support*100, digits=4),
                           round(r.confidence*100, digits=2),
                           round(r.lift, digits=4)])
@@ -122,8 +159,10 @@ function main()
     println("  " * "─"^70)
     for i in 1:min(TOP_N, length(rules))
         r = rules[i]
+        ant_names = join([id_to_item[idx] for idx in r.antecedent], ", ")
+        con_names = join([id_to_item[idx] for idx in r.consequent], ", ")
         @printf("  %-4d %-25s %-25s %6.2f %6.1f %6.3f\n",
-                i, string(r.antecedent), string(r.consequent),
+                i, ant_names, con_names,
                 r.support*100, r.confidence*100, r.lift)
     end
 
@@ -131,7 +170,9 @@ function main()
     println("\n  Business Insights:")
     for i in 1:min(5, length(rules))
         r = rules[i]
-        println("    Rule #$i: $(r.antecedent) ⟹ $(r.consequent)")
+        ant_names = join([id_to_item[idx] for idx in r.antecedent], ", ")
+        con_names = join([id_to_item[idx] for idx in r.consequent], ", ")
+        println("    Rule #$i: $(ant_names) ⟹ $(con_names)")
         @printf("      Lift=%.3f → ", r.lift)
         if r.lift > 2.0
             println("Strong positive correlation – cross-sell opportunity")

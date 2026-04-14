@@ -3,8 +3,8 @@
 #   Agrawal & Srikant, "Fast Algorithms for Mining Association Rules", VLDB 1994
 #
 # Hai phiên bản:
-#   - apriori_basic     : đếm support bằng linear scan (Level 1)
-#   - apriori_optimized : đếm support bằng Hash Tree   (Level 3)
+#   - apriori_basic    
+#   - apriori_optimized
 
 # Auto-include dependencies khi chạy trực tiếp từ CLI
 if !@isdefined(Itemset)
@@ -68,14 +68,12 @@ function _apriori_gen(prev_level::Vector{Vector{Int}})::Vector{Vector{Int}}
 end
 
 # ══════════════════════════════════════════════════════════════════════════════
-# ĐẾM SUPPORT – LINEAR SCAN (Basic)
+# ĐẾM SUPPORT – APRIORI FAST MERGING (Optimized)
 # ══════════════════════════════════════════════════════════════════════════════
 
 """
-    _count_support_basic!(Ck, D, counts)
-
-Đếm support bằng linear scan: với mỗi transaction t, kiểm tra từng candidate.
-# Độ phức tạp: O(|D| × |Ck| × k)
+    _issubset_sorted(sub, arr)
+Hàm hỗ trợ đếm support siêu tốc trên mảng đã sort.
 """
 function _issubset_sorted(sub::Vector{Int}, arr::Vector{Int})::Bool
     i, j = 1, 1
@@ -93,14 +91,60 @@ function _issubset_sorted(sub::Vector{Int}, arr::Vector{Int})::Bool
     return i > m
 end
 
-function _count_support_basic!(Ck::Vector{Vector{Int}},
-                                 D::Vector{Vector{Int}},
-                                 counts::Vector{Int})
+"""
+    _reduce_database(D::Vector{Tuple{Vector{Int}, Int}}, active_items::Set{Int}, min_len::Int)
+
+Chiếu (project) CSDL:
+1. Loại bỏ các items không thuộc `active_items`.
+2. Loại bỏ transaction nếu độ dài < `min_len`.
+3. Gộp (Merge) các transaction giống nhau để cộng dồn freq.
+"""
+function _reduce_database(D::Vector{Tuple{Vector{Int}, Int}},
+                          active_items::Set{Int},
+                          min_len::Int)::Vector{Tuple{Vector{Int}, Int}}
+    projected = Vector{Tuple{Vector{Int}, Int}}()
+    for (t, w) in D
+        new_t = filter(x -> x in active_items, t)
+        if length(new_t) >= min_len
+            push!(projected, (new_t, w))
+        end
+    end
+    
+    isempty(projected) && return projected
+    
+    # Sort and Merge
+    sort!(projected, by = x -> x[1])
+    
+    merged = Vector{Tuple{Vector{Int}, Int}}()
+    cur_t, cur_w = projected[1]
+    
+    for i in 2:length(projected)
+        t, w = projected[i]
+        if t == cur_t
+            cur_w += w
+        else
+            push!(merged, (cur_t, cur_w))
+            cur_t, cur_w = t, w
+        end
+    end
+    push!(merged, (cur_t, cur_w))
+    return merged
+end
+
+"""
+    _count_support_fast!(Ck, merged_D, counts)
+
+Dựa trên CSDL đã được rút gọn và gộp trọng số (Weighted DB),
+lưu count tuyến tính siêu tốc.
+"""
+function _count_support_fast!(Ck::Vector{Vector{Int}},
+                              merged_D::Vector{Tuple{Vector{Int}, Int}},
+                              counts::Vector{Int})
     fill!(counts, 0)
-    for t in D
+    for (t, w) in merged_D
         for ci in eachindex(Ck)
             if _issubset_sorted(Ck[ci], t)
-                counts[ci] += 1
+                counts[ci] += w
             end
         end
     end
@@ -140,13 +184,13 @@ function _count_support_hashtree!(Ck::Vector{Vector{Int}},
 end
 
 # ══════════════════════════════════════════════════════════════════════════════
-# APRIORI BASIC  (Level 1 – Linear scan)
+# APRIORI BASIC  (Level 1 - Hash Tree)
 # ══════════════════════════════════════════════════════════════════════════════
 
 """
     apriori_basic(D, minsup) -> Dict{Int, Vector{Itemset}}
 
-Apriori cơ bản: đếm support bằng Hash Tree (theo thiết kế gốc để tối ưu).
+Apriori cơ bản: đếm support bằng Hash Tree (theo đúng bài báo năm 1994).
 """
 function apriori_basic(D::Vector{Vector{Int}}, minsup::Float64;
                        verbose::Bool=true)::Dict{Int, Vector{Itemset}}
@@ -171,7 +215,8 @@ function apriori_basic(D::Vector{Vector{Int}}, minsup::Float64;
         Ck = _apriori_gen([is.itemset for is in L_prev])
         isempty(Ck) && break
         counts = zeros(Int, length(Ck))
-        _count_support_basic!(Ck, D, counts)
+        _count_support_hashtree!(Ck, D, counts) # Đếm thông qua Hash Tree nguyên mẫu
+
         frequent_k = [Itemset(Ck[ci], counts[ci]) for ci in eachindex(Ck) if counts[ci] >= minsup_count]
         isempty(frequent_k) && break
         all_frequent[k] = frequent_k
@@ -185,17 +230,15 @@ function apriori_basic(D::Vector{Vector{Int}}, minsup::Float64;
 end
 
 # ══════════════════════════════════════════════════════════════════════════════
-# APRIORI OPTIMIZED  (Level 3 – Hash Tree, paper gốc)
+# APRIORI OPTIMIZED  (Level 3 – FAST Merging Reduction)
 # ══════════════════════════════════════════════════════════════════════════════
 
 """
     apriori_optimized(D, minsup) -> Dict{Int, Vector{Itemset}}
 
-Apriori tối ưu: đếm support dùng **Hash Tree** (Agrawal & Srikant 1994).
-
-Candidates Ck được lưu trong hash tree. Khi quét mỗi transaction t,
-thay vì kiểm tra tuần tự tất cả |Ck| candidates, hash tree chỉ duyệt
-các nhánh tương ứng → giảm đáng kể số lần so sánh.
+Apriori cải tiến cực độ nhờ kĩ thuật FAST (Tương tự AprioriFAST.java):
+1. **Transaction Merging**: Gộp dòng giống nhau & cộng dồn Weight.
+2. **Database Reduction**: Lọc bỏ phần tử không thể mở rộng thành freq itemset, giúp CSDL nhỏ siêu tốc.
 """
 function apriori_optimized(D::Vector{Vector{Int}}, minsup::Float64;
                            verbose::Bool=true)::Dict{Int, Vector{Itemset}}
@@ -203,7 +246,7 @@ function apriori_optimized(D::Vector{Vector{Int}}, minsup::Float64;
     minsup_count = ceil(Int, minsup * db_size)
     all_frequent = Dict{Int, Vector{Itemset}}()
 
-    verbose && println("  ┌─ [HashTree] DB=$db_size | minsup=$(round(minsup*100,digits=2))% (count=$minsup_count)")
+    verbose && println("  ┌─ [Apriori FAST] DB=$db_size | minsup=$(round(minsup*100,digits=2))% (count=$minsup_count)")
 
     # L₁
     item_cnt = Dict{Int,Int}()
@@ -215,17 +258,35 @@ function apriori_optimized(D::Vector{Vector{Int}}, minsup::Float64;
     all_frequent[1] = L_prev
     verbose && println("  │  k=1 : $(length(L_prev)) FI")
 
+    # Format DB into Weighted format and reduce initially using frequent 1-items
+    active_items = Set{Int}([is.itemset[1] for is in L_prev])
+    merged_D = [ (t, 1) for t in D ]
+    merged_D = _reduce_database(merged_D, active_items, 2)
+    
     k = 2
     while !isempty(L_prev)
         Ck = _apriori_gen([is.itemset for is in L_prev])
         isempty(Ck) && break
+        
         counts = zeros(Int, length(Ck))
-        _count_support_hashtree!(Ck, D, counts)   # ← HASH TREE
+        _count_support_fast!(Ck, merged_D, counts)
+        
         frequent_k = [Itemset(Ck[ci], counts[ci]) for ci in eachindex(Ck) if counts[ci] >= minsup_count]
         isempty(frequent_k) && break
         all_frequent[k] = frequent_k
         L_prev = frequent_k
-        verbose && println("  │  k=$k : $(length(frequent_k)) FI ($(length(Ck)) cands)")
+        verbose && println("  │  k=$k : $(length(frequent_k)) FI ($(length(Ck)) cands) | Reduced DB Size: $(length(merged_D))")
+        
+        # Build active items set for next reduction step
+        active_items = Set{Int}()
+        for is in frequent_k
+            for item in is.itemset
+                push!(active_items, item)
+            end
+        end
+        # Shrink and Merge DB
+        merged_D = _reduce_database(merged_D, active_items, k + 1)
+        
         k += 1
     end
     total = sum(length(v) for v in values(all_frequent))

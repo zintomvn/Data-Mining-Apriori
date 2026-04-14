@@ -9,7 +9,6 @@
 1. **Julia** (khuyên dùng bản ≥ 1.9)
 2. **Java** (cần có trong `PATH` hệ thống để tự động chạy so sánh với `spmf.jar`)
 3. **SPMF**: File `spmf.jar` đã được đính kèm ở thư mục gốc của project.
-4. **Package Julia**: `Plots.jl`.
 
 ### Cài đặt thư viện Julia
 Mở PowerShell ở thư mục gốc dự án, chạy lệnh sau (chỉ cần chạy lần đầu tiên):
@@ -34,9 +33,12 @@ Các tập dữ liệu đã có sẵn trong dự án:
 2. **Toy Dữ liệu** (`data/toy/`)
    - 5 file `db1.txt` đến `db5.txt` dùng để kiểm tra tính đúng đắn (Unit Tests).
 
+3. **Dữ liệu Thực tế (Market Basket)** (`data/market/`)
+   - `groceries.csv`: Dữ liệu phân tích giỏ hàng mua sắm thực tiễn dùng cho thực nghiệm sinh luật kết hợp và tương tác trực quan.
+
 ---
 
-## 3. Hướng dẫn chạy đồ án
+## 3. Hướng dẫn chạy 
 
 ### 3.1 Chạy giao diện dòng lệnh (CLI)
 Bạn có thể chạy thuật toán Apriori trực tiếp để xuất ra file định dạng giống SPMF (`item1 item2 ... #SUP: count`).
@@ -62,7 +64,7 @@ julia --project src/chapter3_correctness.jl
 ```
 **Output Folder**: `docs/chapter_3/` chứa `correctness_toy.csv`, `correctness_benchmark.csv`, `level3_comparison.csv`.
 
-### 3.4 Chương 4 – 6 Thực nghiệm đo lường hiệu năng
+### 3.4 Chương 4 – Thực nghiệm đo lường hiệu năng
 Chạy tự động toàn bộ 6 thực nghiệm (độ chính xác, thời gian, số lượng FI, RAM, scalability, transaction length effect).
 ```powershell
 julia --project src/experiments.jl
@@ -72,17 +74,20 @@ julia --project src/experiments.jl
 *(Lưu ý: Dataset `accidents.txt` kích cỡ lớn nên việc chạy có thể mất vài phút tuỳ hệ thống).*
 
 ### 3.5 Chương 5 – Ứng dụng thực tế: Phân tích giỏ hàng (Market Basket)
-Thực hiện chạy Apriori trên tập Retail với cấu hình `Minsup=0.01` và `Minconf=0.3` để sinh ra các Luật kết hợp (Association Rules), phân tích Top10 rules theo chỉ số `Lift`.
+Thực hiện chạy Apriori trên tập `groceries.csv` để khai phá báo cáo Tập Phổ Biến và Luật kết hợp (Association Rules) nhằm hỗ trợ Cross-Selling Marketing.
 ```powershell
 julia --project src/chapter5_market_basket.jl
 ```
-**Output Folder**: `docs/chapter_5/` chứa các dữ liệu báo cáo `.csv` và các biểu đồ vẽ tự động như Scatter rules `.png`, Histogram `.png`.
+**Output Folder**: `docs/chapter_5/` chứa các báo cáo `.csv` và các biểu đồ phân phối Scatter/Histogram minh hoạ.
+
+### 3.6 Trực quan hoá bằng Python Notebook
+Sử dụng file Jupyter Notebook `notebooks/demo.ipynb` đã được cấu hình sẵn các lệnh gọi Julia và code Python `pandas` để load lại kết quả CSV, sau đó tạo ra những bảng biểu màu sắc nổi bật và Interactive trong cửa sổ notebook.
 
 ---
 
-## 4. Đặc tả kĩ thuật triển khai (Hash Tree)
-Dự án đã triển khai việc đếm Support hoàn thiện theo paper gốc:
-- `apriori_basic()`: Dùng linear scan duyệt qua database cho từng candidate. Độ phức tạp đếm support là $O(|D| \times |C_k| \times k)$
-- `apriori_optimized()`: Xây dựng **Hash Tree** chứa các candidates thuộc $C_k$. Mỗi transaction duyệt qua Hash Tree để đếm xem chứa subsets nào. Giúp bỏ qua các candidates không cần thiết, gia tăng đáng kể tốc độ hệ thống so với phiên bản Basic. 
+## 4. Đặc tả kĩ thuật triển khai (Level 1 & Level 3 Apriori)
+Dự án đã triển khai việc cấu trúc sâu bên trong thuật toán làm 2 level thực thụ:
+- `apriori_basic()`: Code đúng nguyên bản năm 1994, thiết lập cấu trúc rẽ nhánh **Hash Tree**. Tránh quét vòng lặp tất cả dữ liệu Array tuyến tính, giúp tốc độ đáp ứng của nó vượt trội hơn các bản loop ngây thơ.
+- `apriori_optimized()`: Áp dụng tư tưởng rút gọn CSDL chóp bu của **Apriori-FAST**. Kỹ thuật khai mở sức mạnh nằm ở **Transaction Merging** (Cộng gộp tần suất các giao dịch giống hệt nhau) và **Database Reduction** (Bóc bỏ các Items không còn giá trị khỏi CSDL). Cấu trúc của Database nhỏ lại theo hình chóp nón sau mỗi vòng lặp giúp mức độ Speedup của Optimized bản này hoàn toàn áp đảo Hash Tree cũ. 
 
 Đồng thời, đồ án đã đính kèm `SPMF (spmf.jar)` ngay trong source code, và viết script bằng Julia giao tiếp (pipeline CLI) với Java để lấy số liệu đối xứng tự động tạo báo cáo khách quan.
